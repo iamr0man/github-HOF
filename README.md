@@ -1,15 +1,13 @@
-# 🧰 Simple TypeScript Starter | 2022
+# 🧰 GitHub Hall Of Fame
 
-> We talk about a lot of **advanced Node.js and TypeScript** concepts on [the blog](https://khalilstemmler.com), particularly focused around Domain-Driven Design and large-scale enterprise application patterns. However, I received a few emails from readers that were interested in seeing what a basic TypeScript starter project looks like. So I've put together just that.
+> Simple library with only one method - ``getRepositories``, which return top repositories of passed language.
 
 ### Features
 
 - Minimal
 - TypeScript v4
-- Testing with Jest
 - Linting with Eslint and Prettier
 - Pre-commit hooks with Husky
-- VS Code debugger scripts
 - Local development with Nodemon
 
 ### Scripts
@@ -25,10 +23,6 @@ Starts the app in production by first building the project with `npm run build`,
 #### `npm run build`
 
 Builds the app at `build`, cleaning the folder first.
-
-#### `npm run test`
-
-Runs the `jest` tests once.
 
 #### `npm run test:dev`
 
