@@ -1,14 +1,14 @@
 import { httpStatusCodes } from '../httpStatusCodes';
 import { BaseError } from './baseError';
 
-class NotFoundError extends BaseError {
+class WrongInputError extends BaseError {
   constructor(
     name: string,
-    statusCode = httpStatusCodes.NOT_FOUND,
-    description = 'Repositories for this language not found.',
+    statusCode = httpStatusCodes.BAD_REQUEST,
+    description = 'Wrong input type for language parameter.',
   ) {
     super(name, statusCode, description);
   }
 }
 
-export { NotFoundError };
+export { WrongInputError };

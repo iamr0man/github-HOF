@@ -1,6 +1,11 @@
 import * as dotenv from 'dotenv';
-import * as https from 'https';
 import { logError, logSuccess } from './logger';
+
+import { WrongInputError } from './errors/wrongInputError';
+import { EmptyInputError } from './errors/emptyInputError';
+import { MaxLengthError } from './errors/maxLengthError';
+import * as https from 'https';
+
 import { IncomingMessage } from 'http';
 import { Owner, Repository, Response } from './result.types';
 
@@ -95,9 +100,22 @@ type Result = [Repository, Owner][];
 
 export async function getRepositories(
   language: string | undefined,
-): Promise<Result | Error> {
-  if (!language) {
-    return Promise.reject(new Error('Wrong language input type.'));
+): Promise<string | Error> {
+  // validation
+  if (typeof language !== 'string') {
+    const error = new WrongInputError('Wrong input data');
+    logError(error);
+    return Promise.reject(error);
+  }
+  if (language.length === 0) {
+    const error = new EmptyInputError('Empty input');
+    logError(error);
+    return Promise.reject(error);
+  }
+  if (language.length > 100) {
+    const error = new MaxLengthError('Max length overcome');
+    logError(error);
+    return Promise.reject(error);
   }
   try {
     const response: Response = await getRepositoriesRequest(language);
