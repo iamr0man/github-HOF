@@ -100,7 +100,7 @@ type Result = [Repository, Owner][];
 
 export async function getRepositories(
   language: string | undefined,
-): Promise<string | Error> {
+): Promise<Result | Error> {
   // validation
   if (typeof language !== 'string') {
     const error = new WrongInputError('Wrong input data');
@@ -117,6 +117,7 @@ export async function getRepositories(
     logError(error);
     return Promise.reject(error);
   }
+
   try {
     const response: Response = await getRepositoriesRequest(language);
     const listOfRepositories = response.items;
