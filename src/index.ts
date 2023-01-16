@@ -8,6 +8,12 @@ import { MaxLengthError } from './errors/maxLengthError';
 
 import { Owner, Repository, Response } from './result.types';
 import { request } from './request';
+import {
+  Params,
+  ProcessHandlerCallback,
+  TaskItem,
+} from './queue/concurrentQueue.types';
+import { Queue } from './queue/concurrentQueue';
 
 dotenv.config();
 
@@ -82,3 +88,24 @@ export async function getRepositories(
 // getRepositories('javascript')
 //   .then((res) => console.log(res))
 //   .catch((err) => console.log(err));
+
+const job = (task: TaskItem, callback: ProcessHandlerCallback) => {
+  console.log(`Process: ${task.name}`);
+  setTimeout(callback, task.interval, { err: null, result: task });
+};
+
+const doneCallback = ({ result }: Params) => {
+  const { count } = queue;
+  console.log(`Done: ${result.name}, count:${count}`);
+};
+
+const queue = Queue.channels(3)
+  .process(job)
+  .done(doneCallback)
+  .success((res) => console.log(`Success: ${res.name}`))
+  .failure((err) => console.log(`Failure: ${err}`))
+  .drain(() => console.log('Queue drain'));
+
+for (let i = 0; i < 10; i++) {
+  queue.add({ name: `Task${i}`, interval: i * 1000 });
+}
