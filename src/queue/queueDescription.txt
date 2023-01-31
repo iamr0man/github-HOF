@@ -1,0 +1,13 @@
+1. create interface for:
+    1. Task
+    2. Queue
+    3. QueueFactoryOptions
+2. create queue factory
+  2.1 that that take params: initialState and params
+  2.2 which will consist from two methods:
+    2.2.1 handleLoop - cut head and the rest of queue, start process callback and handle onSucceed and onFailed
+    2.2.2 startQueue - we create once "concurrency" array and start main function handleLoop
+3. create external callbacks for queue handling:
+  3.1 handleJob: console, return promise
+  3.1 onSucceed: push to the result, process specific keys and console
+  3.1 onFailed: console
