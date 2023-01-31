@@ -64,48 +64,51 @@ export async function getRepositories(
     return Promise.reject(error);
   }
 
+  const job = (task: TaskItem, callback: ProcessHandlerCallback) => {
+    task
+      .fn()
+      .then((newValue) =>
+        callback({ err: null, result: { ...task, result: newValue } }),
+      );
+  };
+
+  const doneCallback = ({ result }: Params) => {
+    const { count } = queue;
+    console.log(`Done: ${result.name}, count:${count}`);
+  };
+
+  const queue = Queue.channels(3)
+    .process(job)
+    .done(doneCallback)
+    .success((res) => console.log(`Success: ${res.name}`))
+    .failure((err) => console.log(`Failure: ${err}`));
+
   try {
-    const response: Response = await getRepositoriesRequest(language);
-    const listOfRepositories = response.items;
+    // const response: Response = await getRepositoriesRequest(language);
+    queue.add({
+      name: 'repos',
+      fn: () => getRepositoriesRequest(language),
+      result: null,
+    });
+    // const listOfRepositories = queue.get('repos');
 
-    const ownerPromises: Promise<Owner>[] = listOfRepositories.reduce(
-      (acc, repository) => [...acc, getOwnerDetails(repository)],
-      [] as Promise<Owner>[],
-    );
-    const owners = await Promise.all(ownerPromises);
+    // const ownerPromises: Promise<Owner>[] = listOfRepositories.reduce(
+    //   (acc, repository) => [...acc, getOwnerDetails(repository)],
+    //   [] as Promise<Owner>[],
+    // );
+    // queue.add(() => Promise.all(ownerPromises));
 
-    const result: Result = listOfRepositories.reduce(
-      (acc, curr, index) => [...acc, [curr, owners[index]]],
-      [] as Result,
-    );
-    return Promise.resolve(result);
+    // const result: Result = listOfRepositories.reduce(
+    //   (acc, curr, index) => [...acc, [curr, owners[index]]],
+    //   [] as Result,
+    // );
+    return Promise.resolve([]);
   } catch (err) {
     logError(err);
     return Promise.reject(err);
   }
 }
 
-// getRepositories('javascript')
-//   .then((res) => console.log(res))
-//   .catch((err) => console.log(err));
-
-const job = (task: TaskItem, callback: ProcessHandlerCallback) => {
-  console.log(`Process: ${task.name}`);
-  setTimeout(callback, task.interval, { err: null, result: task });
-};
-
-const doneCallback = ({ result }: Params) => {
-  const { count } = queue;
-  console.log(`Done: ${result.name}, count:${count}`);
-};
-
-const queue = Queue.channels(3)
-  .process(job)
-  .done(doneCallback)
-  .success((res) => console.log(`Success: ${res.name}`))
-  .failure((err) => console.log(`Failure: ${err}`))
-  .drain(() => console.log('Queue drain'));
-
-for (let i = 0; i < 10; i++) {
-  queue.add({ name: `Task${i}`, interval: i * 1000 });
-}
+getRepositories('javascript')
+  .then((res) => console.log(res))
+  .catch((err) => console.log(err));

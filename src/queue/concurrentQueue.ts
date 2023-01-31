@@ -11,6 +11,7 @@ import {
 export class Queue {
   private readonly concurrency: number;
   count: number;
+  processedTask: TaskItem[];
 
   private onProcess: ProcessCallback | undefined;
   private onFailure: FailureCallback | undefined;
@@ -21,6 +22,7 @@ export class Queue {
   constructor(concurrency: number) {
     this.concurrency = concurrency;
     this.count = 0;
+    // this.waitingTask = [];
   }
 
   static channels(concurrency: number) {
@@ -75,11 +77,6 @@ export class Queue {
 
   success(callback: SuccessCallback) {
     this.onSuccess = callback;
-    return this;
-  }
-
-  drain(callback: DrainCallback) {
-    this.onDrain = callback;
     return this;
   }
 }
