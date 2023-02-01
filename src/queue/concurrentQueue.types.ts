@@ -1,3 +1,5 @@
+import { Owner, Repository } from '../result.types';
+
 export interface TaskItem {
   name: string;
   fn: () => Promise<any>;
@@ -17,12 +19,12 @@ export type DrainCallback = () => void;
 export interface Task {
   readonly key: number;
   readonly name: string;
-};
+}
 
 export interface Queue {
   readonly start: () => void;
   readonly add: (task: Task) => void;
-};
+}
 
 export interface QueueFactoryOptions {
   readonly concurrency?: number;
@@ -30,6 +32,26 @@ export interface QueueFactoryOptions {
   readonly process: (task: Task) => Promise<unknown>;
   readonly onSucceed?: (task: Task, result: unknown) => void;
   readonly onFailed?: (task: Task, err: unknown) => void;
-};
+}
 
-export type Result = unknown[];
+export type TaskResult = unknown[];
+
+export type Result = [Repository, Owner][];
+
+export interface RateLimit {
+  limit: number;
+  remaining: number;
+  reset: number;
+  used: number;
+}
+
+export interface RateLimitResponse {
+  resources: {
+    core: RateLimit;
+    search: RateLimit;
+    graphql: RateLimit;
+    integration_manifest: RateLimit;
+    code_scanning_upload: RateLimit;
+  };
+  rate: RateLimit;
+}

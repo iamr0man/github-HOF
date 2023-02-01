@@ -105,7 +105,7 @@ export interface Repository {
   };
 }
 
-export interface Response {
+export interface RepositoryResponse {
   total_count: number;
   incomplete_results: number;
   items: Repository[];
