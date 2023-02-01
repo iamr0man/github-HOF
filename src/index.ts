@@ -6,14 +6,17 @@ import { WrongInputError } from './errors/wrongInputError';
 import { EmptyInputError } from './errors/emptyInputError';
 import { MaxLengthError } from './errors/maxLengthError';
 
-import { Owner, Repository, Response } from './result.types';
+import { Owner, RepositoryResponse } from './result.types';
 import { request } from './request';
+
+import { createQueue } from './queue/newConcurrentQueue';
 import {
-  Params,
-  ProcessHandlerCallback,
-  TaskItem,
+  RateLimit,
+  RateLimitResponse,
+  Result,
+  Task,
+  TaskResult,
 } from './queue/concurrentQueue.types';
-import { Queue } from './queue/concurrentQueue';
 
 dotenv.config();
 
@@ -28,22 +31,33 @@ enum SORT {
 
 const getRepositoriesRequest = (
   language: string,
-): Promise<Response> | never => {
+): Promise<RepositoryResponse> | never => {
   const queryCreated = 'created:">2001-01-01';
   const searchRepoUrl = `${GITHUB_API_URL}/search/repositories`;
   const urlWithQuery = `${searchRepoUrl}?q=${queryCreated}&l=${language}&sort=${SORT.stars}&per_page=${MAX_REPO_PER_PAGE}`;
-  return request<Response>(urlWithQuery);
+
+  return request<RepositoryResponse>(urlWithQuery);
 };
 const getOwnerRequest = (userName: string): Promise<Owner> | never => {
   const searchUserUrl = `${GITHUB_API_URL}/users`;
   const urlWithQuery = `${searchUserUrl}/${userName}`;
+
   return request<Owner>(urlWithQuery);
 };
+const getOwnerDetails = async (repositories: RepositoryResponse) => {
+  const ownerPromises = repositories.items.map((repository) =>
+    getOwnerRequest(repository.owner.login),
+  );
+  return Promise.all(ownerPromises);
+};
 
-const getOwnerDetails = async (repository: Repository) =>
-  getOwnerRequest(repository.owner.login);
+const getRateLimitRequest = (): Promise<RateLimitResponse> | never => {
+  const rateLimitUrl = `${GITHUB_API_URL}/rate_limit`;
 
-type Result = [Repository, Owner][];
+  return request<RateLimitResponse>(rateLimitUrl);
+};
+
+const generateId = () => Math.floor(Math.random() * 100);
 
 export async function getRepositories(
   language: string | undefined,
@@ -64,40 +78,78 @@ export async function getRepositories(
     return Promise.reject(error);
   }
 
-  const job = (task: TaskItem, callback: ProcessHandlerCallback) => {
-    task
-      .fn()
-      .then((newValue) =>
-        callback({ err: null, result: { ...task, result: newValue } }),
-      );
-  };
-
-  const doneCallback = ({ result }: Params) => {
-    const { count } = queue;
-    console.log(`Done: ${result.name}, count:${count}`);
-  };
-
-  const queue = Queue.channels(3)
-    .process(job)
-    .done(doneCallback)
-    .success((res) => console.log(`Success: ${res.name}`))
-    .failure((err) => console.log(`Failure: ${err}`));
+  const GET_REPOSITORIES = 'GET_REPOSITORIES';
+  const GET_OWNERS = 'GET_OWNERS';
+  const GET_RATE_LIMIT = 'GET_RATE_LIMIT';
 
   try {
-    // const response: Response = await getRepositoriesRequest(language);
-    queue.add({
-      name: 'repos',
-      fn: () => getRepositoriesRequest(language),
-      result: null,
+    const initialState: Task[] = [];
+    let taskResult: TaskResult = [];
+
+    const taskCallbackMap: Record<string, (props?: any) => Promise<unknown>> = {
+      [GET_REPOSITORIES]: (language) => getRepositoriesRequest(language),
+      [GET_OWNERS]: (repositories) => getOwnerDetails(repositories),
+      [GET_RATE_LIMIT]: getRateLimitRequest,
+    };
+
+    const process = (task: Task) => {
+      console.log('Handle task', task);
+
+      const fn = taskCallbackMap[task.name];
+      const [repositories, ...newValue] = taskResult;
+
+      switch (task.name) {
+        case GET_REPOSITORIES:
+          return fn(language);
+        case GET_OWNERS:
+          taskResult = newValue;
+          return fn(repositories);
+        default:
+          return fn();
+      }
+    };
+
+    const rateLimit = await getRateLimitRequest();
+    let searchRate: Pick<RateLimit, 'limit' | 'remaining'> =
+      rateLimit.resources.search;
+
+    const onSucceed = (task: Task, value: unknown) => {
+      console.log('Complete', task, value);
+
+      switch (task.name) {
+        case GET_RATE_LIMIT:
+          searchRate = (value as RateLimitResponse).resources.search;
+          break;
+        default:
+          taskResult.push(value);
+      }
+    };
+
+    const onFailed = (task: Task, err: unknown) => {
+      console.log('Failed', task.key, err);
+    };
+
+    let maxAvailableRate = searchRate.remaining;
+
+    while (maxAvailableRate > 0) {
+      initialState.push({
+        key: generateId(),
+        name: GET_REPOSITORIES,
+      });
+      initialState.push({
+        key: generateId(),
+        name: GET_OWNERS,
+      });
+      maxAvailableRate--;
+    }
+
+    const queue = createQueue(initialState, {
+      process,
+      onSucceed,
+      onFailed,
     });
-    // const listOfRepositories = queue.get('repos');
-
-    // const ownerPromises: Promise<Owner>[] = listOfRepositories.reduce(
-    //   (acc, repository) => [...acc, getOwnerDetails(repository)],
-    //   [] as Promise<Owner>[],
-    // );
-    // queue.add(() => Promise.all(ownerPromises));
-
+    queue.start();
+    //
     // const result: Result = listOfRepositories.reduce(
     //   (acc, curr, index) => [...acc, [curr, owners[index]]],
     //   [] as Result,
