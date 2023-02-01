@@ -1,52 +1,42 @@
+import {
+  Queue,
+  QueueFactoryOptions,
+  Result,
+  Task,
+} from './concurrentQueue.types';
+
 const getRepos = () => {
   return new Promise((resolve) => {
-    setTimeout(() => resolve([1, 2, 3]), 3000);
+    setTimeout(() => resolve([1, 2, Math.floor(Math.random() * 100)]), 3000);
   });
 };
 const getOwners = (repositories: unknown) => {
   return new Promise((resolve, reject) => {
     setTimeout(() => {
       if (Array.isArray(repositories)) {
-        return resolve('owners fetched');
+        return resolve(repositories);
       }
       return reject('repositories is empty');
     }, 3000);
   });
 };
 
-const generateId = () => Math.random() * 10000;
+const generateId = () => Math.floor(Math.random() * 100);
 
 const initialState = [];
 
+const GET_REPOSITORIES = 'GET_REPOSITORIES';
+const GET_OWNERS = 'GET_OWNERS';
+
 initialState.push({
   key: generateId(),
-  name: 'getRepositories',
-  cb: getRepos,
+  name: GET_REPOSITORIES,
 });
+
 initialState.push({
   key: generateId(),
-  name: 'getRepositories',
-  cb: getRepos,
+  name: GET_REPOSITORIES,
 });
-
-type Task = {
-  readonly key: number;
-  readonly name: string;
-  readonly cb: (params?: any) => Promise<any>;
-};
-
-type Queue = {
-  readonly start: () => void;
-  readonly add: (task: Task) => void;
-};
-
-type QueueFactoryOptions = {
-  readonly concurrency?: number;
-
-  readonly process: (task: Task) => Promise<any>;
-  readonly onSucceed?: (task: Task, result: any) => void;
-  readonly onFailed?: (task: Task, err: unknown) => void;
-};
 
 export function createQueue(
   initialState: readonly Task[],
@@ -89,29 +79,35 @@ export function createQueue(
   };
 }
 
-const queue = createQueue(initialState, {
-  process: handleJob,
-  onSucceed,
-  onFailed: onError,
-});
-
-queue.start();
+const taskCallbackMap: Record<string, (props?: unknown) => Promise<unknown>> = {
+  [GET_REPOSITORIES]: getRepos,
+  [GET_OWNERS]: (repositories) => getOwners(repositories),
+};
+let result: Result = [];
 
 function handleJob(task: Task) {
   console.log('Handle task', task);
-  return task.cb();
+  const fn = taskCallbackMap[task.name];
+  const [repositories, ...newValue] = result;
+
+  switch (task.name) {
+    case GET_REPOSITORIES:
+      return fn();
+    case GET_OWNERS:
+      result = newValue;
+      return fn(repositories);
+    default:
+      return fn();
+  }
 }
 
-const result = [];
-
-function onSucceed(task: Task, value: any) {
+function onSucceed(task: Task, value: unknown) {
   result.push(value);
 
-  if (task.name === 'getRepositories') {
+  if (task.name === GET_REPOSITORIES) {
     queue.add({
       key: generateId(),
-      name: 'getRepositoriesOwners',
-      cb: () => getOwners(value),
+      name: GET_OWNERS,
     });
   }
 
@@ -121,3 +117,11 @@ function onSucceed(task: Task, value: any) {
 function onError(task: Task, err: unknown) {
   console.log('Failed', task.key, err);
 }
+
+const queue = createQueue(initialState, {
+  process: handleJob,
+  onSucceed,
+  onFailed: onError,
+});
+
+queue.start();
