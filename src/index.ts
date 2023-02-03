@@ -22,7 +22,7 @@ dotenv.config();
 
 const { GITHUB_API_URL } = process.env;
 
-const MAX_REPO_PER_PAGE = 3;
+const MAX_REPO_PER_PAGE = 5;
 const MAX_LANGUAGE_LENGTH = 100;
 
 enum SORT {
@@ -59,6 +59,10 @@ const getRateLimitRequest = (): Promise<RateLimitResponse> | never => {
 
 const generateId = () => Math.floor(Math.random() * 100);
 
+const GET_REPOSITORIES = 'GET_REPOSITORIES';
+const GET_OWNER = 'GET_OWNER';
+const GET_RATE_LIMIT = 'GET_RATE_LIMIT';
+
 export async function getRepositories(
   language: string | undefined,
 ): Promise<Result | Error> {
@@ -78,17 +82,13 @@ export async function getRepositories(
     return Promise.reject(error);
   }
 
-  const GET_REPOSITORIES = 'GET_REPOSITORIES';
-  const GET_OWNERS = 'GET_OWNERS';
-  const GET_RATE_LIMIT = 'GET_RATE_LIMIT';
-
   try {
     const initialState: Task[] = [];
     let taskResult: TaskResult = [];
 
     const taskCallbackMap: Record<string, (props?: any) => Promise<unknown>> = {
       [GET_REPOSITORIES]: (language) => getRepositoriesRequest(language),
-      [GET_OWNERS]: (repositories) => getOwnerDetails(repositories),
+      [GET_OWNER]: (repositories) => getOwnerDetails(repositories),
       [GET_RATE_LIMIT]: getRateLimitRequest,
     };
 
@@ -101,7 +101,7 @@ export async function getRepositories(
       switch (task.name) {
         case GET_REPOSITORIES:
           return fn(language);
-        case GET_OWNERS:
+        case GET_OWNER:
           taskResult = newValue;
           return fn(repositories);
         default:
@@ -117,6 +117,14 @@ export async function getRepositories(
       console.log('Complete', task, value);
 
       switch (task.name) {
+        case GET_REPOSITORIES:
+          (value as RepositoryResponse).items.forEach(() => {
+            initialState.push({
+              key: generateId(),
+              name: GET_OWNER,
+            });
+          });
+          break;
         case GET_RATE_LIMIT:
           searchRate = (value as RateLimitResponse).resources.search;
           break;
@@ -129,19 +137,10 @@ export async function getRepositories(
       console.log('Failed', task.key, err);
     };
 
-    let maxAvailableRate = searchRate.remaining;
-
-    while (maxAvailableRate > 0) {
-      initialState.push({
-        key: generateId(),
-        name: GET_REPOSITORIES,
-      });
-      initialState.push({
-        key: generateId(),
-        name: GET_OWNERS,
-      });
-      maxAvailableRate--;
-    }
+    initialState.push({
+      key: generateId(),
+      name: GET_REPOSITORIES,
+    });
 
     const queue = createQueue(initialState, {
       process,
@@ -149,11 +148,7 @@ export async function getRepositories(
       onFailed,
     });
     queue.start();
-    //
-    // const result: Result = listOfRepositories.reduce(
-    //   (acc, curr, index) => [...acc, [curr, owners[index]]],
-    //   [] as Result,
-    // );
+
     return Promise.resolve([]);
   } catch (err) {
     logError(err);
