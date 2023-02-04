@@ -44,12 +44,6 @@ const getOwnerRequest = (userName: string): Promise<Owner> | never => {
 
   return request<Owner>(urlWithQuery);
 };
-const getOwnerDetails = async (repositories: RepositoryResponse) => {
-  const ownerPromises = repositories.items.map((repository) =>
-    getOwnerRequest(repository.owner.login),
-  );
-  return Promise.all(ownerPromises);
-};
 
 const getRateLimitRequest = (): Promise<RateLimitResponse> | never => {
   const rateLimitUrl = `${GITHUB_API_URL}/rate_limit`;
@@ -84,26 +78,33 @@ export async function getRepositories(
 
   try {
     const initialState: Task[] = [];
-    let taskResult: TaskResult = [];
+    const taskResult: TaskResult = [];
 
     const taskCallbackMap: Record<string, (props?: any) => Promise<unknown>> = {
       [GET_REPOSITORIES]: (language) => getRepositoriesRequest(language),
-      [GET_OWNER]: (repositories) => getOwnerDetails(repositories),
+      [GET_OWNER]: (username) => getOwnerRequest(username),
       [GET_RATE_LIMIT]: getRateLimitRequest,
     };
 
     const process = (task: Task) => {
       console.log('Handle task', task);
+      if (!task.name) {
+        return Promise.reject('');
+      }
 
       const fn = taskCallbackMap[task.name];
-      const [repositories, ...newValue] = taskResult;
+
+      let repository = null;
+      if (taskResult.length) {
+        const [repositories] = taskResult;
+        repository = (repositories as RepositoryResponse).items.pop();
+      }
 
       switch (task.name) {
         case GET_REPOSITORIES:
           return fn(language);
         case GET_OWNER:
-          taskResult = newValue;
-          return fn(repositories);
+          return fn(repository?.owner.login);
         default:
           return fn();
       }
@@ -112,26 +113,6 @@ export async function getRepositories(
     const rateLimit = await getRateLimitRequest();
     let searchRate: Pick<RateLimit, 'limit' | 'remaining'> =
       rateLimit.resources.search;
-
-    const onSucceed = (task: Task, value: unknown) => {
-      console.log('Complete', task, value);
-
-      switch (task.name) {
-        case GET_REPOSITORIES:
-          (value as RepositoryResponse).items.forEach(() => {
-            initialState.push({
-              key: generateId(),
-              name: GET_OWNER,
-            });
-          });
-          break;
-        case GET_RATE_LIMIT:
-          searchRate = (value as RateLimitResponse).resources.search;
-          break;
-        default:
-          taskResult.push(value);
-      }
-    };
 
     const onFailed = (task: Task, err: unknown) => {
       console.log('Failed', task.key, err);
@@ -147,6 +128,35 @@ export async function getRepositories(
       onSucceed,
       onFailed,
     });
+    const result = [];
+    // eslint-disable-next-line no-inner-declarations,@typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    // eslint-disable-next-line no-inner-declarations
+    function onSucceed(task: Task, value: unknown) {
+      console.log('Complete', task, value);
+
+      switch (task.name) {
+        case GET_REPOSITORIES:
+          result.push(value);
+          taskResult.push(value);
+          (value as RepositoryResponse).items.forEach(() => {
+            queue.add({
+              key: generateId(),
+              name: GET_OWNER,
+            });
+          });
+          break;
+        case GET_OWNER:
+          result.push();
+          break;
+        case GET_RATE_LIMIT:
+          searchRate = (value as RateLimitResponse).resources.search;
+          break;
+        default:
+          break;
+      }
+    }
+
     queue.start();
 
     return Promise.resolve([]);
