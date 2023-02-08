@@ -122,15 +122,19 @@ export async function handleRepositoriesByQueue(
   }
 
   const formatResult = () => {
-    return result.reduce((res, [repository]) => {
+    let formattedResult: Result = [];
+    result.forEach(([repository]) => {
       const owner = ownerArray.find(
         (owner: Owner) => owner.login === repository.owner.login,
       );
       if (!owner) {
-        return [...res, [repository, {} as Owner]];
+        formattedResult = [...formattedResult, [repository, null]];
+      } else {
+        formattedResult = [...formattedResult, [repository, owner]];
       }
-      return [...res, [repository, owner]];
-    }, [] as Result);
+    });
+    return formattedResult;
   };
+
   return queue.start().then(formatResult);
 }

@@ -45,4 +45,4 @@ export interface QueueFactoryOptions<T, R> {
   readonly onFailed?: (task: T, err: unknown) => Promise<void>;
 }
 
-export type Result = Array<[Repository, Owner]>;
+export type Result = Array<[Repository, Owner | null]>;
