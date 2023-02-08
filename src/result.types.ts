@@ -110,3 +110,21 @@ export interface RepositoryResponse {
   incomplete_results: number;
   items: Repository[];
 }
+
+export interface RateLimit {
+  limit: number;
+  remaining: number;
+  reset: number;
+  used: number;
+}
+
+export interface RateLimitResponse {
+  resources: {
+    core: RateLimit;
+    search: RateLimit;
+    graphql: RateLimit;
+    integration_manifest: RateLimit;
+    code_scanning_upload: RateLimit;
+  };
+  rate: RateLimit;
+}
