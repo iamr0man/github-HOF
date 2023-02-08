@@ -1,9 +1,9 @@
-import { Queue, QueueFactoryOptions, Task } from './concurrentQueue.types';
+import { Queue, QueueFactoryOptions } from './concurrentQueue.types';
 
-export function createQueue(
-  initialState: readonly Task[],
-  params: QueueFactoryOptions,
-): Queue {
+export function createQueue<T, R>(
+  initialState: readonly T[],
+  params: QueueFactoryOptions<T, R>,
+): Queue<T> {
   let queue = [...initialState];
 
   const concurrency = params.concurrency ?? 2;
@@ -15,10 +15,10 @@ export function createQueue(
     return params
       .process(job)
       .then((result) => {
-        params.onSucceed?.(job, result);
+        return params.onSucceed?.(job, result);
       })
       .catch((err) => {
-        params.onFailed?.(job, err);
+        return params.onFailed?.(job, err);
       })
       .then(() => {
         if (queue.length > 0) {
@@ -27,12 +27,12 @@ export function createQueue(
       });
   }
 
-  const startQueue = (): void => {
+  const startQueue = (): Promise<void[]> => {
     const threads = new Array(concurrency)
       .fill(undefined)
       .map(() => handleLoop());
 
-    Promise.allSettled(threads);
+    return Promise.all(threads);
   };
 
   return {
