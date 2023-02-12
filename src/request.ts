@@ -9,8 +9,9 @@ export async function request<T>(url: string): Promise<T> {
 
   const options = {
     headers: {
-      'user-agent': USER_AGENT,
       Accept: 'application/vnd.github+json',
+      Authorization: 'Bearer ' + process.env.GITHUB_TOKEN,
+      'user-agent': USER_AGENT,
       'X-GitHub-Api-Version': '2022-11-28',
     },
   };

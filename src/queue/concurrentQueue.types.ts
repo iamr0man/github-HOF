@@ -1,17 +1,48 @@
-export interface TaskItem {
-  name: string;
-  interval: number;
+import {
+  Owner,
+  RateLimitResponse,
+  Repository,
+  RepositoryResponse,
+} from '../result.types';
+
+export enum TaskName {
+  GET_REPOSITORIES = 'GET_REPOSITORIES',
+  GET_OWNER = 'GET_OWNER',
+  GET_RATE_LIMIT = 'GET_RATE_LIMIT',
 }
-export interface Params {
-  err: Error | string | null;
-  result: TaskItem;
+
+export type TaskRepository = {
+  name: TaskName.GET_REPOSITORIES;
+  result: RepositoryResponse;
+};
+
+export type TaskOwner = {
+  name: TaskName.GET_OWNER;
+  result: Owner;
+};
+
+export type TaskRateLimit = {
+  name: TaskName.GET_RATE_LIMIT;
+  result: RateLimitResponse;
+};
+
+export type TaskResult = TaskOwner | TaskRepository | TaskRateLimit;
+
+export interface Task {
+  readonly name: TaskName;
 }
-export type ProcessHandlerCallback = (params: Params) => void;
-export type ProcessCallback = (
-  task: TaskItem,
-  callback: ProcessHandlerCallback,
-) => void;
-export type FailureCallback = (err: Error | string) => void;
-export type DoneCallback = (params: Params) => void;
-export type SuccessCallback = (result: TaskItem) => void;
-export type DrainCallback = () => void;
+
+export interface Queue<T> {
+  readonly start: () => Promise<void[]>;
+  readonly add: (task: T) => void;
+}
+
+export interface QueueFactoryOptions<T, R> {
+  readonly concurrency?: number;
+
+  readonly process: (task: T) => Promise<R>;
+  readonly onSucceed?: (task: T, result: R) => Promise<void>;
+  readonly onFailed?: (task: T, err: unknown) => Promise<void>;
+}
+
+export type Result = Array<[Repository, Owner | null]>;
