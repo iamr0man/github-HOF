@@ -35,8 +35,13 @@ export function createQueue<T, R>(
     return Promise.all(threads);
   };
 
+  const clear = () => {
+    queue.length = 0;
+  };
+
   return {
     start: startQueue,
     add: (task) => queue.push(task),
+    clear,
   };
 }
