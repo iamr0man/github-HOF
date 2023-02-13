@@ -7,27 +7,29 @@ import {
   TaskResult,
 } from './concurrentQueue.types';
 import { Owner, Repository } from '../result.types';
-import {
-  getOwnerRequest,
-  getRateLimitRequest,
-  getRepositoriesRequest,
-} from '../api';
+import { getOwnerRequest, getRepositoriesRequest } from '../api';
 import { assertUnreachable } from '../utils';
 import { createQueue } from './newConcurrentQueue';
+import { MAX_REPO_PER_PAGE, RATE_LIMIT_HEADER } from '../constants';
 
 export async function handleRepositoriesByQueue(
   language: string,
+  repositoryLength: number,
 ): Promise<Result> {
   const initialState: Task[] = [];
   let ownerArray: Owner[] = [];
   let repositoryArray: Repository[] = [];
   let result: Result = [];
 
-  initialState.push({
-    name: TaskName.GET_REPOSITORIES,
-  });
+  let currentPage = 0;
 
-  // const rateLimit = await getRateLimitRequest();
+  const pages = Math.round(repositoryLength / MAX_REPO_PER_PAGE);
+
+  for (let i = 0; i < pages; i++) {
+    initialState.push({
+      name: TaskName.GET_REPOSITORIES,
+    });
+  }
 
   const queue = createQueue<Task, TaskResult>(initialState, {
     process,
@@ -39,40 +41,89 @@ export async function handleRepositoriesByQueue(
     console.log('Handle task', task);
 
     if (!task) {
-      return Promise.reject('');
+      return Promise.reject('Empty task');
     }
 
-    let repository = {} as Repository;
-    if (repositoryArray.length) {
-      const [currentRepository, ...restRepositories] = repositoryArray;
+    const getRepositoriesTask = () => {
+      currentPage++;
 
-      repository = currentRepository;
-      result = [...result, [repository, {} as Owner]];
-      repositoryArray = restRepositories;
-    }
+      const isLastPage =
+        currentPage !== 1 &&
+        currentPage === Math.round(repositoryLength / MAX_REPO_PER_PAGE);
+
+      return getRepositoriesRequest(language, currentPage).then(
+        (response): TaskResult => {
+          const remainingRateLimit = response.headers[RATE_LIMIT_HEADER];
+
+          if (Number(remainingRateLimit) === 0) {
+            queue.clear();
+            return {
+              name: TaskName.CLEAR_QUEUE,
+            };
+          }
+
+          if (isLastPage) {
+            const dataItems = response.data.items.slice(
+              0,
+              repositoryLength % MAX_REPO_PER_PAGE,
+            );
+            const responseData = {
+              ...response.data,
+              items: dataItems,
+            };
+            return {
+              name: TaskName.GET_REPOSITORIES,
+              result: responseData,
+            };
+          }
+          return {
+            name: TaskName.GET_REPOSITORIES,
+            result: response.data,
+          };
+        },
+      );
+    };
+
+    const getOwnerTask = () => {
+      let repository = {} as Repository;
+      if (repositoryArray.length) {
+        const [currentRepository, ...restRepositories] = repositoryArray;
+
+        repository = currentRepository;
+        result = [...result, [repository, null]];
+        repositoryArray = restRepositories;
+      }
+
+      return getOwnerRequest(repository?.owner.login).then(
+        (response): TaskResult => {
+          const remainingRateLimit = response.headers[RATE_LIMIT_HEADER];
+
+          if (Number(remainingRateLimit) === 0) {
+            queue.clear();
+            return {
+              name: TaskName.CLEAR_QUEUE,
+            };
+          }
+
+          return {
+            name: TaskName.GET_OWNER,
+            result: response.data,
+          };
+        },
+      );
+    };
+
+    const clearQueueTask = () => {
+      return Promise.reject({ name: TaskName.CLEAR_QUEUE });
+    };
 
     switch (task.name) {
       case TaskName.GET_REPOSITORIES:
-        return getRepositoriesRequest(language).then(
-          (response): TaskResult => ({
-            name: TaskName.GET_REPOSITORIES,
-            result: response,
-          }),
-        );
+        return getRepositoriesTask();
       case TaskName.GET_OWNER:
-        return getOwnerRequest(repository?.owner.login).then(
-          (response): TaskResult => ({
-            name: TaskName.GET_OWNER,
-            result: response,
-          }),
-        );
-      case TaskName.GET_RATE_LIMIT:
-        return getRateLimitRequest().then(
-          (response): TaskResult => ({
-            name: TaskName.GET_RATE_LIMIT,
-            result: response,
-          }),
-        );
+        return getOwnerTask();
+      case TaskName.CLEAR_QUEUE:
+        return clearQueueTask();
       default:
         assertUnreachable(task.name);
     }
@@ -92,8 +143,9 @@ export async function handleRepositoriesByQueue(
     }
 
     const repositoryTaskFn = (value: TaskRepository) => {
-      repositoryArray = [...repositoryArray, ...value.result.items];
-      value.result.items.forEach(() => {
+      const items = value.result.items;
+      repositoryArray = [...repositoryArray, ...items];
+      items.forEach(() => {
         queue.add({
           name: TaskName.GET_OWNER,
         });
@@ -108,8 +160,6 @@ export async function handleRepositoriesByQueue(
       repositoryTaskFn(value);
     } else if (isTaskOwner(value)) {
       ownerTaskFn(value);
-    } else {
-      // searchRate = value.resources.search;
     }
   }
 
