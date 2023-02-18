@@ -3,24 +3,50 @@ import { Owner, Repository, RepositoryResponse } from '../result.types';
 export enum TaskName {
   GET_REPOSITORIES = 'GET_REPOSITORIES',
   GET_OWNER = 'GET_OWNER',
-  CLEAR_QUEUE = 'CLEAR_QUEUE',
 }
 
-export type TaskRepository = {
-  name: TaskName.GET_REPOSITORIES;
-  result: RepositoryResponse;
+export enum TaskNameError {
+  RATE_LIMIT_ERROR = 'RATE_LIMIT_ERROR',
+}
+
+export enum Status {
+  SUCCESS = 'SUCCESS',
+  ERROR = 'ERROR',
+}
+
+export type RepositoryError = {
+  name: TaskNameError.RATE_LIMIT_ERROR;
 };
 
-export type TaskOwner = {
-  name: TaskName.GET_OWNER;
-  result: Owner;
+export type OwnerError = {
+  name: TaskNameError.RATE_LIMIT_ERROR;
 };
 
-export type TaskRateLimit = {
-  name: TaskName.CLEAR_QUEUE;
-};
+export type TaskRepository =
+  | {
+      name: TaskName.GET_REPOSITORIES;
+      status: Status.SUCCESS;
+      result: RepositoryResponse;
+    }
+  | {
+      name: TaskName.GET_REPOSITORIES;
+      status: Status.ERROR;
+      result: RepositoryError;
+    };
 
-export type TaskResult = TaskOwner | TaskRepository | TaskRateLimit;
+export type TaskOwner =
+  | {
+      name: TaskName.GET_OWNER;
+      status: Status.SUCCESS;
+      result: Owner;
+    }
+  | {
+      name: TaskName.GET_OWNER;
+      status: Status.ERROR;
+      result: OwnerError;
+    };
+
+export type TaskResult = TaskOwner | TaskRepository;
 
 export interface Task {
   readonly name: TaskName;
@@ -35,7 +61,7 @@ export interface Queue<T> {
 export interface QueueFactoryOptions<T, R> {
   readonly concurrency?: number;
 
-  readonly process: (task: T) => Promise<R> | never;
+  readonly process: (task: T) => Promise<R>;
   readonly onSucceed?: (task: T, result: R) => Promise<void>;
   readonly onFailed?: (task: T, err: unknown) => Promise<void>;
 }
