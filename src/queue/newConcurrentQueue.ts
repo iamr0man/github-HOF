@@ -31,7 +31,7 @@ export function createQueue<T, R>(initialState: readonly T[], params: QueueFacto
   };
 
   const clear = () => {
-    queue.length = 0;
+    queue = [];
   };
 
   return {
