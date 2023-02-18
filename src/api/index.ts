@@ -11,10 +11,7 @@ const { GITHUB_API_URL } = process.env;
 
 const DEFAULT_PAGE = 1;
 
-export const getRepositoriesRequest = (
-  language: string,
-  page?: number,
-): Promise<RequestData<RepositoryResponse>> => {
+export const getRepositoriesRequest = (language: string, page?: number): Promise<RequestData<RepositoryResponse>> => {
   const queryCreated = 'created:">2001-01-01';
   const searchRepoUrl = `${GITHUB_API_URL}/search/repositories`;
   const urlWithQuery = `${searchRepoUrl}?q=${queryCreated}&l=${language}&sort=${
