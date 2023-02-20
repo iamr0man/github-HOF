@@ -47,9 +47,16 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
     const getRepositoriesTask = () => {
       currentPage++;
 
+      let perPage = MAX_REPO_PER_PAGE;
+      const isSinglePage = repositoryLength === 1;
       const isLastPage = currentPage !== 1 && currentPage === Math.round(repositoryLength / MAX_REPO_PER_PAGE);
+      const isOddLength = repositoryLength % 2 > 0;
 
-      return getRepositoriesRequest(language, currentPage).then((response): TaskResult => {
+      if ((isSinglePage || isLastPage) && isOddLength) {
+        perPage = repositoryLength % MAX_REPO_PER_PAGE;
+      }
+
+      return getRepositoriesRequest(language, currentPage, perPage).then((response): TaskResult => {
         const remainingRateLimit = response.headers[RATE_LIMIT_HEADER];
 
         if (Number(remainingRateLimit) === 0) {
@@ -59,20 +66,6 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
             result: {
               name: TaskNameError.RATE_LIMIT_ERROR,
             },
-          };
-        }
-
-        if (isLastPage) {
-          const indexToSlice = repositoryLength % 2 === 0 ? MAX_REPO_PER_PAGE : repositoryLength % MAX_REPO_PER_PAGE;
-          const dataItems = response.data.items.slice(0, indexToSlice);
-          const responseData = {
-            ...response.data,
-            items: dataItems,
-          };
-          return {
-            name: TaskName.GET_REPOSITORIES,
-            status: Status.SUCCESS,
-            result: responseData,
           };
         }
         return {

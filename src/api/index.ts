@@ -11,18 +11,20 @@ const { GITHUB_API_URL } = process.env;
 
 const DEFAULT_PAGE = 1;
 
-export const getRepositoriesRequest = (language: string, page?: number): Promise<RequestData<RepositoryResponse>> => {
+export const getRepositoriesRequest = (
+  language: string,
+  page?: number,
+  perPage = MAX_REPO_PER_PAGE,
+): Promise<RequestData<RepositoryResponse>> => {
   const queryCreated = 'created:">2001-01-01';
   const searchRepoUrl = `${GITHUB_API_URL}/search/repositories`;
-  const urlWithQuery = `${searchRepoUrl}?q=${queryCreated}&l=${language}&sort=${
-    Sort.stars
-  }&per_page=${MAX_REPO_PER_PAGE}&page=${page || DEFAULT_PAGE}`;
+  const urlWithQuery = `${searchRepoUrl}?q=${queryCreated}&l=${language}&sort=${Sort.stars}&per_page=${perPage}&page=${
+    page || DEFAULT_PAGE
+  }`;
 
   return request(urlWithQuery);
 };
-export const getOwnerRequest = (
-  userName: string | undefined,
-): Promise<RequestData<Owner>> => {
+export const getOwnerRequest = (userName: string | undefined): Promise<RequestData<Owner>> => {
   const searchUserUrl = `${GITHUB_API_URL}/users`;
   const urlWithQuery = `${searchUserUrl}/${userName}`;
 
