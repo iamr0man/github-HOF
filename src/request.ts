@@ -1,9 +1,13 @@
 import * as https from 'https';
-import { IncomingMessage } from 'http';
+import { IncomingHttpHeaders, IncomingMessage } from 'http';
 import { httpStatusCodes } from './httpStatusCodes';
-import { logSuccess } from './logger';
 
-export async function request<T>(url: string): Promise<T> {
+export type RequestData<T> = {
+  headers: IncomingHttpHeaders;
+  data: T;
+};
+
+export async function request<T>(url: string): Promise<RequestData<T>> {
   const USER_AGENT =
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36';
 
@@ -31,8 +35,7 @@ export async function request<T>(url: string): Promise<T> {
       });
 
       res.on('end', () => {
-        logSuccess(data);
-        resolve(JSON.parse(data));
+        resolve({ headers: res.headers, data: JSON.parse(data) });
       });
     };
 
