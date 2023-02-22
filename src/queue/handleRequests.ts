@@ -120,14 +120,6 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
   async function onSucceed(task: Task, value: TaskResult) {
     console.log('Complete', task, value);
 
-    function isTaskRepository(taskResult: TaskResult): taskResult is TaskRepository {
-      return taskResult.name === TaskName.GET_REPOSITORIES;
-    }
-
-    function isTaskOwner(taskResult: TaskResult): taskResult is TaskOwner {
-      return taskResult.name === TaskName.GET_OWNER;
-    }
-
     const repositoryTaskFn = (value: TaskRepository) => {
       if (value.status === Status.ERROR) {
         queue.clear();
@@ -158,10 +150,15 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
       }
     };
 
-    if (isTaskRepository(value)) {
-      repositoryTaskFn(value);
-    } else if (isTaskOwner(value)) {
-      ownerTaskFn(value);
+    switch (value.name) {
+      case TaskName.GET_REPOSITORIES:
+        repositoryTaskFn(value);
+        break;
+      case TaskName.GET_OWNER:
+        ownerTaskFn(value);
+        break;
+      default:
+        assertUnreachable(value.name);
     }
   }
 
