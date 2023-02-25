@@ -29,7 +29,9 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
     });
   };
 
-  initState();
+  if (repositoryLength) {
+    initState();
+  }
 
   const queue = createQueue<Task, TaskResult>(initialState, {
     process,
@@ -158,6 +160,8 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
         ownerTaskFn(value);
         break;
       default:
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
         assertUnreachable(value.name);
     }
   }
