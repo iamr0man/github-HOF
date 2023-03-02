@@ -10,7 +10,13 @@ const { GITHUB_API_URL } = process.env;
 
 const DEFAULT_PAGE = 1;
 
-export const getRepositoriesRequest = (language: string, page?: number, perPage = MAX_REPO_PER_PAGE) => {
+interface RepositoryRequestProps {
+  language: string;
+  page?: number;
+  perPage: number;
+}
+
+export const getRepositoriesRequest = ({ language, page, perPage = MAX_REPO_PER_PAGE }: RepositoryRequestProps) => {
   const queryCreated = 'created:">2001-01-01';
   const searchRepoUrl = `${GITHUB_API_URL}/search/repositories`;
   const urlWithQuery = `${searchRepoUrl}?q=${queryCreated}&l=${language}&sort=${Sort.stars}&per_page=${perPage}&page=${

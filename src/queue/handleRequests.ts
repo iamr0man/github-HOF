@@ -6,13 +6,33 @@ import {
   TaskNameError,
   TaskOwner,
   TaskRepository,
-  TaskResult,
+  TaskResult
 } from './concurrentQueue.types';
 import { Owner, Repository } from '../result.types';
-import { getOwnerRequest, getRepositoriesRequest } from '../api';
 import { assertUnreachable } from '../utils';
 import { createQueue } from './newConcurrentQueue';
-import { MAX_REPO_PER_PAGE, RATE_LIMIT_HEADER } from '../constants';
+import { MAX_REPO_PER_PAGE } from '../constants';
+import { usePagination } from '../utils/pagination';
+import { repositoryTaskProcess } from './repositoryTaskProcess';
+import { ownerTaskProcess } from './ownerTaskProcess';
+
+export const createRateLimitError = <T>(name: TaskName) => {
+  return {
+    name,
+    status: Status.ERROR,
+    result: {
+      name: TaskNameError.RATE_LIMIT_ERROR,
+    },
+  } as T;
+};
+
+export const createTaskResult = <T>(name: TaskName, result: TaskResult['result']) => {
+  return {
+    name,
+    status: Status.SUCCESS,
+    result,
+  } as T;
+};
 
 export async function handleRepositoriesByQueue(language: string, repositoryLength: number): Promise<Result> {
   const initialState: Task[] = [];
@@ -20,7 +40,7 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
   let repositoryArray: Repository[] = [];
   let result: Result = [];
 
-  const pages = Math.round(repositoryLength / MAX_REPO_PER_PAGE);
+  let pages = 0;
   let currentPage = 0;
 
   const initState = () => {
@@ -30,6 +50,8 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
   };
 
   if (repositoryLength) {
+    pages = Math.round(repositoryLength / MAX_REPO_PER_PAGE);
+
     initState();
   }
 
@@ -39,46 +61,15 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
     onFailed,
   });
 
-  function process(task: Task): Promise<TaskResult> {
-    console.log('Handle task', task);
+  const getRepositoriesTask = async () => {
+    const { perPage, currentPage: newPage } = usePagination(currentPage, repositoryLength);
+    currentPage = newPage;
 
-    if (!task) {
-      return Promise.reject('Empty task');
-    }
+    return repositoryTaskProcess(language, currentPage, perPage);
+  };
 
-    const getRepositoriesTask = () => {
-      currentPage++;
-
-      let perPage = MAX_REPO_PER_PAGE;
-      const isSinglePage = repositoryLength === 1;
-      const isLastPage = currentPage !== 1 && currentPage === Math.round(repositoryLength / MAX_REPO_PER_PAGE);
-      const isOddLength = repositoryLength % 2 > 0;
-
-      if ((isSinglePage || isLastPage) && isOddLength) {
-        perPage = repositoryLength % MAX_REPO_PER_PAGE;
-      }
-
-      return getRepositoriesRequest(language, currentPage, perPage).then((response): TaskResult => {
-        const remainingRateLimit = response.headers[RATE_LIMIT_HEADER];
-
-        if (Number(remainingRateLimit) === 0) {
-          return {
-            name: TaskName.GET_REPOSITORIES,
-            status: Status.ERROR,
-            result: {
-              name: TaskNameError.RATE_LIMIT_ERROR,
-            },
-          };
-        }
-        return {
-          name: TaskName.GET_REPOSITORIES,
-          status: Status.SUCCESS,
-          result: response.data,
-        };
-      });
-    };
-
-    const getOwnerTask = () => {
+  const getOwnerTask = async () => {
+    const getCurrentRepository = () => {
       let repository = {} as Repository;
       if (repositoryArray.length) {
         const [currentRepository, ...restRepositories] = repositoryArray;
@@ -87,27 +78,18 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
         result = [...result, [repository, null]];
         repositoryArray = restRepositories;
       }
-
-      return getOwnerRequest(repository?.owner.login).then((response): TaskResult => {
-        const remainingRateLimit = response.headers[RATE_LIMIT_HEADER];
-
-        if (Number(remainingRateLimit) === 0) {
-          return {
-            name: TaskName.GET_OWNER,
-            status: Status.ERROR,
-            result: {
-              name: TaskNameError.RATE_LIMIT_ERROR,
-            },
-          };
-        }
-
-        return {
-          name: TaskName.GET_OWNER,
-          status: Status.SUCCESS,
-          result: response.data,
-        };
-      });
+      return repository;
     };
+
+    return ownerTaskProcess(getCurrentRepository());
+  };
+
+  function process(task: Task): Promise<TaskResult> {
+    console.log('Handle task', task);
+
+    if (!task) {
+      return Promise.reject('Empty task');
+    }
 
     switch (task.name) {
       case TaskName.GET_REPOSITORIES:

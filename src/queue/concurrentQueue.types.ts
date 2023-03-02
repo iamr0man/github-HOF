@@ -22,29 +22,33 @@ export type OwnerError = {
   name: TaskNameError.RATE_LIMIT_ERROR;
 };
 
-export type TaskRepository =
-  | {
-      name: TaskName.GET_REPOSITORIES;
-      status: Status.SUCCESS;
-      result: RepositoryResponse;
-    }
-  | {
-      name: TaskName.GET_REPOSITORIES;
-      status: Status.ERROR;
-      result: RepositoryError;
-    };
+export interface TaskRepositorySuccess {
+  name: TaskName.GET_REPOSITORIES;
+  status: Status.SUCCESS;
+  result: RepositoryResponse;
+}
 
-export type TaskOwner =
-  | {
-      name: TaskName.GET_OWNER;
-      status: Status.SUCCESS;
-      result: Owner;
-    }
-  | {
-      name: TaskName.GET_OWNER;
-      status: Status.ERROR;
-      result: OwnerError;
-    };
+export interface TaskRepositoryError {
+  name: TaskName.GET_REPOSITORIES;
+  status: Status.ERROR;
+  result: RepositoryError;
+}
+
+export type TaskRepository = TaskRepositorySuccess | TaskRepositoryError;
+
+export interface TaskOwnerSuccess {
+  name: TaskName.GET_OWNER;
+  status: Status.SUCCESS;
+  result: Owner;
+}
+
+export interface TaskOwnerError {
+  name: TaskName.GET_OWNER;
+  status: Status.ERROR;
+  result: OwnerError;
+}
+
+export type TaskOwner = TaskOwnerSuccess | TaskOwnerError;
 
 export type TaskResult = TaskOwner | TaskRepository;
 
