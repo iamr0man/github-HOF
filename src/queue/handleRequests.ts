@@ -14,7 +14,8 @@ import { createQueue } from './newConcurrentQueue';
 import { MAX_REPO_PER_PAGE } from '../constants';
 import { usePagination } from '../utils/pagination';
 import { repositoryTaskProcess } from './repositoryTaskProcess';
-import { ownerTaskProcess } from './ownerTaskProcess';
+import { createTaskProcess } from './taskProcess';
+import { getOwnerRequest } from '../api';
 
 export const createRateLimitError = <T>(name: TaskName) => {
   return {
@@ -68,20 +69,20 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
     return repositoryTaskProcess(language, currentPage, perPage);
   };
 
+  const getOwnerRequestProps = () => {
+    let repository = {} as Repository;
+    if (repositoryArray.length) {
+      const [currentRepository, ...restRepositories] = repositoryArray;
+
+      repository = currentRepository;
+      result = [...result, [repository, null]];
+      repositoryArray = restRepositories;
+    }
+    return repository?.owner.login;
+  };
+
   const getOwnerTask = async () => {
-    const getCurrentRepository = () => {
-      let repository = {} as Repository;
-      if (repositoryArray.length) {
-        const [currentRepository, ...restRepositories] = repositoryArray;
-
-        repository = currentRepository;
-        result = [...result, [repository, null]];
-        repositoryArray = restRepositories;
-      }
-      return repository;
-    };
-
-    return ownerTaskProcess(getCurrentRepository());
+    return createTaskProcess(TaskName.GET_OWNER).getProps(getOwnerRequestProps).execute<TaskOwner>(getOwnerRequest);
   };
 
   function process(task: Task): Promise<TaskResult> {
