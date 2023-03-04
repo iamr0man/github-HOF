@@ -7,7 +7,10 @@ import { validate } from './validation';
 import { handleRepositoriesByQueue } from './queue/handleRequests';
 import { Result } from './queue/concurrentQueue.types';
 
-export async function getRepositories(language: string | undefined, repositoryLength: number): Promise<Result> {
+export async function getRepositories(
+  language: string | undefined,
+  repositoryLength: number,
+): Promise<Result> {
   validate(language);
 
   return handleRepositoriesByQueue(language as string, repositoryLength);

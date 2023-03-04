@@ -39,7 +39,7 @@ export type TaskRepository = TaskRepositorySuccess | TaskRepositoryError;
 export interface TaskOwnerSuccess {
   name: TaskName.GET_OWNER;
   status: Status.SUCCESS;
-  result: Owner;
+  result: [Repository, Owner];
 }
 
 export interface TaskOwnerError {
@@ -52,8 +52,15 @@ export type TaskOwner = TaskOwnerSuccess | TaskOwnerError;
 
 export type TaskResult = TaskOwner | TaskRepository;
 
-export interface Task {
-  readonly name: TaskName;
+export type Task = TaskProcessRepositories | TaskProcessOwner;
+
+export interface TaskProcessRepositories {
+  readonly name: TaskName.GET_REPOSITORIES;
+}
+
+export interface TaskProcessOwner {
+  readonly name: TaskName.GET_OWNER;
+  readonly data: Repository;
 }
 
 export interface Queue<T> {
@@ -71,3 +78,9 @@ export interface QueueFactoryOptions<T, R> {
 }
 
 export type Result = Array<[Repository, Owner | null]>;
+
+export interface StateResult {
+  result: Result;
+  pages: number;
+  currentPage: number;
+}

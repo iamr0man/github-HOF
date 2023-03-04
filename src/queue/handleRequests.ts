@@ -1,60 +1,73 @@
 import {
   Result,
+  StateResult,
   Status,
   Task,
   TaskName,
-  TaskNameError,
   TaskOwner,
   TaskRepository,
-  TaskResult
+  TaskResult,
 } from './concurrentQueue.types';
-import { Owner, Repository } from '../result.types';
+import { Repository } from '../result.types';
 import { assertUnreachable } from '../utils';
 import { createQueue } from './newConcurrentQueue';
 import { MAX_REPO_PER_PAGE } from '../constants';
 import { usePagination } from '../utils/pagination';
 import { repositoryTaskProcess } from './repositoryTaskProcess';
-import { createTaskProcess } from './taskProcess';
-import { getOwnerRequest } from '../api';
+import { ownerTaskProcess } from './ownerTaskProcess';
 
-export const createRateLimitError = <T>(name: TaskName) => {
-  return {
-    name,
-    status: Status.ERROR,
-    result: {
-      name: TaskNameError.RATE_LIMIT_ERROR,
-    },
-  } as T;
-};
+const createInitialState = (totalRepositories: number) => {
+  if (totalRepositories < 1) {
+    throw Error('There is repositories to fetch');
+  }
 
-export const createTaskResult = <T>(name: TaskName, result: TaskResult['result']) => {
-  return {
-    name,
-    status: Status.SUCCESS,
-    result,
-  } as T;
-};
-
-export async function handleRepositoriesByQueue(language: string, repositoryLength: number): Promise<Result> {
   const initialState: Task[] = [];
-  let ownerArray: Owner[] = [];
-  let repositoryArray: Repository[] = [];
-  let result: Result = [];
 
-  let pages = 0;
-  let currentPage = 0;
+  initialState.push({
+    name: TaskName.GET_REPOSITORIES,
+  });
 
-  const initState = () => {
-    initialState.push({
-      name: TaskName.GET_REPOSITORIES,
-    });
+  const pages = Math.round(totalRepositories / MAX_REPO_PER_PAGE);
+  return {
+    initialState,
+    pages,
+  };
+};
+
+export async function handleRepositoriesByQueue(
+  language: string,
+  repositoryLength: number,
+): Promise<Result> {
+  let state: StateResult = {
+    pages: 0,
+    result: [],
+    currentPage: 0,
   };
 
-  if (repositoryLength) {
-    pages = Math.round(repositoryLength / MAX_REPO_PER_PAGE);
+  const setPages = (pages: number) => {
+    state = {
+      ...state,
+      pages,
+    };
+  };
 
-    initState();
-  }
+  const setCurrentPage = (currentPage: number) => {
+    state = {
+      ...state,
+      currentPage,
+    };
+  };
+
+  const setResult = (result: Result) => {
+    state = {
+      ...state,
+      result,
+    };
+  };
+
+  const { initialState, pages } = createInitialState(repositoryLength);
+
+  setPages(pages);
 
   const queue = createQueue<Task, TaskResult>(initialState, {
     process,
@@ -63,26 +76,17 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
   });
 
   const getRepositoriesTask = async () => {
-    const { perPage, currentPage: newPage } = usePagination(currentPage, repositoryLength);
-    currentPage = newPage;
+    const { perPage, currentPage: newPage } = usePagination(
+      state.currentPage,
+      repositoryLength,
+    );
+    setCurrentPage(newPage);
 
-    return repositoryTaskProcess(language, currentPage, perPage);
+    return repositoryTaskProcess(language, state.currentPage, perPage);
   };
 
-  const getOwnerRequestProps = () => {
-    let repository = {} as Repository;
-    if (repositoryArray.length) {
-      const [currentRepository, ...restRepositories] = repositoryArray;
-
-      repository = currentRepository;
-      result = [...result, [repository, null]];
-      repositoryArray = restRepositories;
-    }
-    return repository?.owner.login;
-  };
-
-  const getOwnerTask = async () => {
-    return createTaskProcess(TaskName.GET_OWNER).getProps(getOwnerRequestProps).execute<TaskOwner>(getOwnerRequest);
+  const getOwnerTask = async (repository: Repository) => {
+    return ownerTaskProcess(repository);
   };
 
   function process(task: Task): Promise<TaskResult> {
@@ -96,8 +100,11 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
       case TaskName.GET_REPOSITORIES:
         return getRepositoriesTask();
       case TaskName.GET_OWNER:
-        return getOwnerTask();
+        return getOwnerTask(task.data);
       default:
+        // @TODO: add in guard to fix TS error
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
         assertUnreachable(task.name);
     }
   }
@@ -111,11 +118,11 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
         return;
       }
 
-      const items = value.result.items;
-      repositoryArray = [...repositoryArray, ...items];
-      items.forEach(() => {
+      const repositories = value.result.items;
+      repositories.forEach((repository) => {
         queue.add({
           name: TaskName.GET_OWNER,
+          data: repository,
         });
       });
     };
@@ -126,9 +133,15 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
         return;
       }
 
-      ownerArray = [...ownerArray, value.result];
+      setResult([...state.result, value.result]);
 
-      if (result.length / currentPage === MAX_REPO_PER_PAGE && pages > currentPage) {
+      const { result, currentPage, pages } = state;
+
+      const repositoriesFetched =
+        result.length / currentPage === MAX_REPO_PER_PAGE &&
+        pages > currentPage;
+
+      if (repositoriesFetched) {
         queue.add({
           name: TaskName.GET_REPOSITORIES,
         });
@@ -143,6 +156,7 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
         ownerTaskFn(value);
         break;
       default:
+        // @TODO: add in guard to fix TS error
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
         // @ts-ignore
         assertUnreachable(value.name);
@@ -157,18 +171,5 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
     console.log('Failed', err);
   }
 
-  const formatResult = () => {
-    let formattedResult: Result = [];
-    result.forEach(([repository]) => {
-      const owner = ownerArray.find((owner: Owner) => owner.login === repository.owner.login);
-      if (!owner) {
-        formattedResult = [...formattedResult, [repository, null]];
-      } else {
-        formattedResult = [...formattedResult, [repository, owner]];
-      }
-    });
-    return formattedResult;
-  };
-
-  return queue.start().then(formatResult);
+  return queue.start().then(() => state.result);
 }
