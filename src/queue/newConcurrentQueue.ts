@@ -1,6 +1,9 @@
 import { Queue, QueueFactoryOptions } from './concurrentQueue.types';
 
-export function createQueue<T, R>(initialState: readonly T[], params: QueueFactoryOptions<T, R>): Queue<T> {
+export function createQueue<T, R>(
+  initialState: readonly T[],
+  params: QueueFactoryOptions<T, R>,
+): Queue<T> {
   let queue = [...initialState];
 
   const concurrency = params.concurrency ?? 2;
@@ -25,7 +28,9 @@ export function createQueue<T, R>(initialState: readonly T[], params: QueueFacto
   }
 
   const startQueue = (): Promise<void[]> => {
-    const threads = new Array(concurrency).fill(undefined).map(() => handleLoop());
+    const threads = new Array(concurrency)
+      .fill(undefined)
+      .map(() => handleLoop());
 
     return Promise.all(threads);
   };

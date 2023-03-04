@@ -1,4 +1,9 @@
-import { Status, TaskName, TaskNameError, TaskResult } from './concurrentQueue.types';
+import {
+  Status,
+  TaskName,
+  TaskNameError,
+  TaskResult,
+} from './concurrentQueue.types';
 import { RATE_LIMIT_HEADER } from '../constants';
 
 type PropsCallback<T> = () => T;
@@ -34,8 +39,7 @@ export function createTaskProcess(taskName: TaskName) {
       } as T;
     },
 
-    // T['result']
-    checkResponse: function <T>(response) {
+    checkResponse: function <T>(response): T {
       const remainingRateLimit = response.headers[RATE_LIMIT_HEADER];
       if (Number(remainingRateLimit) === 0) {
         return this._createRateLimitError(taskName);
@@ -44,11 +48,10 @@ export function createTaskProcess(taskName: TaskName) {
       return this._createTaskResult(taskName, response.data);
     },
 
-    // T['result']
     execute: async function <T>(getRequest: (...args: any[]) => Promise<any>): Promise<T> {
       const response = await getRequest(state.params);
 
-      return this.checkResponse<T>(response);
+      return this.checkResponse(response);
     },
   };
 }
