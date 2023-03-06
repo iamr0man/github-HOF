@@ -1,11 +1,6 @@
 import { RATE_LIMIT_HEADER } from '../constants';
 import { getRepositoriesRequest } from '../api';
-import {
-  Status,
-  TaskName,
-  TaskNameError,
-  TaskResult,
-} from './concurrentQueue.types';
+import { Status, TaskName, TaskNameError, TaskResult } from './concurrentQueue.types';
 
 export async function repositoryTaskProcess(
   language: string,

@@ -8,13 +8,11 @@ import {
   TaskRepository,
   TaskResult,
 } from './concurrentQueue.types';
-import { Repository } from '../result.types';
 import { assertUnreachable } from '../utils';
 import { createQueue } from './newConcurrentQueue';
 import { MAX_REPO_PER_PAGE } from '../constants';
 import { usePagination } from '../utils/pagination';
-import { repositoryTaskProcess } from './repositoryTaskProcess';
-import { ownerTaskProcess } from './ownerTaskProcess';
+import { createTaskProcess } from './taskProcess';
 
 const createInitialState = (totalRepositories: number) => {
   if (totalRepositories < 1) {
@@ -28,33 +26,50 @@ const createInitialState = (totalRepositories: number) => {
   });
 
   const pages = Math.round(totalRepositories / MAX_REPO_PER_PAGE);
+
   return {
     initialState,
     pages,
   };
 };
 
-export async function handleRepositoriesByQueue(
-  language: string,
-  repositoryLength: number,
-): Promise<Result> {
+export async function handleRepositoriesByQueue(language: string, repositoryLength: number): Promise<Result> {
   let state: StateResult = {
-    pages: 0,
+    pagination: {
+      pages: 0,
+      currentPage: 0,
+      perPage: 0,
+    },
     result: [],
-    currentPage: 0,
   };
 
   const setPages = (pages: number) => {
     state = {
       ...state,
-      pages,
+      pagination: {
+        ...state.pagination,
+        pages,
+      },
     };
   };
 
   const setCurrentPage = (currentPage: number) => {
     state = {
       ...state,
-      currentPage,
+      pagination: {
+        ...state.pagination,
+        currentPage,
+      },
+    };
+  };
+
+  const setPerPage = (perPage: number) => {
+    state = {
+      ...state,
+      pagination: {
+        ...state.pagination,
+        perPage,
+      },
     };
   };
 
@@ -69,45 +84,28 @@ export async function handleRepositoriesByQueue(
 
   setPages(pages);
 
+  const handleCurrentPage = () => {
+    const { perPage, currentPage: newPage } = usePagination(state.pagination.currentPage, repositoryLength);
+
+    setCurrentPage(newPage);
+    setPerPage(perPage);
+  };
+
+  const getRepositoryTaskProps = () => {
+    handleCurrentPage();
+
+    return {
+      language,
+      currentPage: state.pagination.currentPage,
+      perPage: state.pagination.perPage,
+    };
+  };
+
   const queue = createQueue<Task, TaskResult>(initialState, {
-    process,
+    process: createTaskProcess(getRepositoryTaskProps),
     onSucceed,
     onFailed,
   });
-
-  const getRepositoriesTask = async () => {
-    const { perPage, currentPage: newPage } = usePagination(
-      state.currentPage,
-      repositoryLength,
-    );
-    setCurrentPage(newPage);
-
-    return repositoryTaskProcess(language, state.currentPage, perPage);
-  };
-
-  const getOwnerTask = async (repository: Repository) => {
-    return ownerTaskProcess(repository);
-  };
-
-  function process(task: Task): Promise<TaskResult> {
-    console.log('Handle task', task);
-
-    if (!task) {
-      return Promise.reject('Empty task');
-    }
-
-    switch (task.name) {
-      case TaskName.GET_REPOSITORIES:
-        return getRepositoriesTask();
-      case TaskName.GET_OWNER:
-        return getOwnerTask(task.data);
-      default:
-        // @TODO: add in guard to fix TS error
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
-        assertUnreachable(task.name);
-    }
-  }
 
   async function onSucceed(task: Task, value: TaskResult) {
     console.log('Complete', task, value);
@@ -119,6 +117,7 @@ export async function handleRepositoriesByQueue(
       }
 
       const repositories = value.result.items;
+
       repositories.forEach((repository) => {
         queue.add({
           name: TaskName.GET_OWNER,
@@ -135,11 +134,10 @@ export async function handleRepositoriesByQueue(
 
       setResult([...state.result, value.result]);
 
-      const { result, currentPage, pages } = state;
+      const { result, pagination } = state;
 
       const repositoriesFetched =
-        result.length / currentPage === MAX_REPO_PER_PAGE &&
-        pages > currentPage;
+        result.length / pagination.currentPage === MAX_REPO_PER_PAGE && pages > pagination.currentPage;
 
       if (repositoriesFetched) {
         queue.add({

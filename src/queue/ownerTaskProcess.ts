@@ -3,9 +3,7 @@ import { RATE_LIMIT_HEADER } from '../constants';
 import { Status, TaskName, TaskNameError, TaskResult } from './concurrentQueue.types';
 import { Repository } from '../result.types';
 
-export async function ownerTaskProcess(
-  repository: Repository,
-): Promise<TaskResult> {
+export async function ownerTaskProcess(repository: Repository): Promise<TaskResult> {
   const response = await getOwnerRequest(repository?.owner.login);
 
   const remainingRateLimit = response.headers[RATE_LIMIT_HEADER];

@@ -81,6 +81,9 @@ export type Result = Array<[Repository, Owner | null]>;
 
 export interface StateResult {
   result: Result;
-  pages: number;
-  currentPage: number;
+  pagination: {
+    pages: number;
+    currentPage: number;
+    perPage: number;
+  };
 }
