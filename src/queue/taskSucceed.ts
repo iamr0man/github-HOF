@@ -14,7 +14,7 @@ import { assertUnreachable } from '../utils';
 
 type ResultFn = (result: Result) => void;
 
-export const createTaskSucceed = (queue: Queue<Task>, state: StateResult, setResult: ResultFn) => {
+export const createTaskSucceed = (queue: Queue<Task, TaskResult>, state: StateResult, setResult: ResultFn) => {
   const repositoryTaskFn = (value: TaskRepository) => {
     if (value.status === Status.ERROR) {
       queue.clear();

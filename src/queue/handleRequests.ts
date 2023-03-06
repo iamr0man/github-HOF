@@ -92,18 +92,11 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
     };
   };
 
-  const queue = createQueue<Task, TaskResult>(initialState, {
-    process: createTaskProcess(getRepositoryTaskProps),
-    onSucceed: createTaskSucceed(queue, state, setResult),
-    onFailed,
-  });
+  const queue = createQueue<Task, TaskResult>(initialState);
 
-  // @TODO suggest fix for: Block-scoped variable 'queue' used before its declaration.
-  // queue.createParams({
-  //   process: createTaskProcess(getRepositoryTaskProps),
-  //   onSucceed: createTaskSucceed(queue, state, setResult),
-  //   onFailed,
-  // });
+  queue.onProcess(createTaskProcess(getRepositoryTaskProps));
+  queue.onSucceed(createTaskSucceed(queue, state, setResult));
+  queue.onFail(onFailed);
 
   async function onFailed(task: Task, err: unknown) {
     if (!task) {

@@ -63,19 +63,23 @@ export interface TaskProcessOwner {
   readonly data: Repository;
 }
 
-export interface Queue<T> {
+export interface Queue<T, R> {
+  readonly onProcess: (cb: ProcessCb<T, R>) => void;
+  readonly onSucceed: (cb: SuccessCb<T, R>) => void;
+  readonly onFail: (cb: FailCb<T>) => void;
+
   readonly start: () => Promise<void[]>;
   readonly add: (task: T) => void;
   readonly clear: () => void;
 }
 
-export interface QueueFactoryOptions<T, R> {
+export interface QueueFactoryOptions {
   readonly concurrency?: number;
-
-  readonly process: (task: T) => Promise<R>;
-  readonly onSucceed?: (task: T, result: R) => void;
-  readonly onFailed?: (task: T, err: unknown) => Promise<void>;
 }
+
+export type ProcessCb<T, R> = (task: T) => Promise<R>;
+export type SuccessCb<T, R> = (task: T, result: R) => void;
+export type FailCb<T> = (task: T, err: unknown) => Promise<void>;
 
 export type Result = Array<[Repository, Owner | null]>;
 
