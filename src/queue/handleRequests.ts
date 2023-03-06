@@ -1,18 +1,9 @@
-import {
-  Result,
-  StateResult,
-  Status,
-  Task,
-  TaskName,
-  TaskOwner,
-  TaskRepository,
-  TaskResult,
-} from './concurrentQueue.types';
-import { assertUnreachable } from '../utils';
+import { Queue, Result, StateResult, Task, TaskName, TaskResult } from './concurrentQueue.types';
 import { createQueue } from './newConcurrentQueue';
 import { MAX_REPO_PER_PAGE } from '../constants';
 import { usePagination } from '../utils/pagination';
 import { createTaskProcess } from './taskProcess';
+import { createTaskSucceed } from './taskSucceed';
 
 const createInitialState = (totalRepositories: number) => {
   if (totalRepositories < 1) {
@@ -103,63 +94,16 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
 
   const queue = createQueue<Task, TaskResult>(initialState, {
     process: createTaskProcess(getRepositoryTaskProps),
-    onSucceed,
+    onSucceed: createTaskSucceed(queue, state, setResult),
     onFailed,
   });
 
-  async function onSucceed(task: Task, value: TaskResult) {
-    console.log('Complete', task, value);
-
-    const repositoryTaskFn = (value: TaskRepository) => {
-      if (value.status === Status.ERROR) {
-        queue.clear();
-        return;
-      }
-
-      const repositories = value.result.items;
-
-      repositories.forEach((repository) => {
-        queue.add({
-          name: TaskName.GET_OWNER,
-          data: repository,
-        });
-      });
-    };
-
-    const ownerTaskFn = (value: TaskOwner) => {
-      if (value.status === Status.ERROR) {
-        queue.clear();
-        return;
-      }
-
-      setResult([...state.result, value.result]);
-
-      const { result, pagination } = state;
-
-      const repositoriesFetched =
-        result.length / pagination.currentPage === MAX_REPO_PER_PAGE && pages > pagination.currentPage;
-
-      if (repositoriesFetched) {
-        queue.add({
-          name: TaskName.GET_REPOSITORIES,
-        });
-      }
-    };
-
-    switch (value.name) {
-      case TaskName.GET_REPOSITORIES:
-        repositoryTaskFn(value);
-        break;
-      case TaskName.GET_OWNER:
-        ownerTaskFn(value);
-        break;
-      default:
-        // @TODO: add in guard to fix TS error
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
-        assertUnreachable(value.name);
-    }
-  }
+  // @TODO suggest fix for: Block-scoped variable 'queue' used before its declaration.
+  // queue.createParams({
+  //   process: createTaskProcess(getRepositoryTaskProps),
+  //   onSucceed: createTaskSucceed(queue, state, setResult),
+  //   onFailed,
+  // });
 
   async function onFailed(task: Task, err: unknown) {
     if (!task) {

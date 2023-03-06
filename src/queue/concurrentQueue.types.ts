@@ -73,7 +73,7 @@ export interface QueueFactoryOptions<T, R> {
   readonly concurrency?: number;
 
   readonly process: (task: T) => Promise<R>;
-  readonly onSucceed?: (task: T, result: R) => Promise<void>;
+  readonly onSucceed?: (task: T, result: R) => void;
   readonly onFailed?: (task: T, err: unknown) => Promise<void>;
 }
 
