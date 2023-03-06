@@ -1,21 +1,28 @@
-import { Queue, QueueFactoryOptions } from './concurrentQueue.types';
+import { FailCb, ProcessCb, Queue, QueueFactoryOptions, SuccessCb } from './concurrentQueue.types';
 
-export function createQueue<T, R>(initialState: readonly T[], params: QueueFactoryOptions<T, R>): Queue<T> {
+export function createQueue<T, R>(initialState: readonly T[], params?: QueueFactoryOptions): Queue<T, R> {
   let queue = [...initialState];
 
-  const concurrency = params.concurrency ?? 2;
+  let process: ProcessCb<T, R> | null = null;
+  let onSuccess: SuccessCb<T, R> | null = null;
+  let onFailed: FailCb<T> | null = null;
+
+  const concurrency = params?.concurrency ?? 2;
 
   function handleLoop(): Promise<void> {
     const [job, ...rest] = queue;
     queue = rest;
 
-    return params
-      .process(job)
+    if (!process) {
+      return Promise.reject('No callbacks providen');
+    }
+
+    return process(job)
       .then((result) => {
-        return params.onSucceed?.(job, result);
+        return onSuccess?.(job, result);
       })
       .catch((err) => {
-        return params.onFailed?.(job, err);
+        return onFailed?.(job, err);
       })
       .then(() => {
         if (queue.length > 0) {
@@ -34,9 +41,25 @@ export function createQueue<T, R>(initialState: readonly T[], params: QueueFacto
     queue = [];
   };
 
+  const onProcess = (processCb: ProcessCb<T, R>) => {
+    process = processCb;
+  };
+
+  const onSucceed = (successCb: SuccessCb<T, R>) => {
+    onSuccess = successCb;
+  };
+
+  const onFail = (failCb: FailCb<T>) => {
+    onFailed = failCb;
+  };
+
   return {
     start: startQueue,
     add: (task) => queue.push(task),
     clear,
+
+    onProcess,
+    onSucceed,
+    onFail,
   };
 }
