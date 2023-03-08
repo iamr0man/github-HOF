@@ -14,20 +14,35 @@ import { assertUnreachable } from '../utils';
 
 type ResultFn = (result: Result) => void;
 
-export const createTaskSucceed = (queue: Queue<Task, TaskResult>, state: StateResult, setResult: ResultFn) => {
+type Events = {
+  onError: () => {};
+  onRepositoryComlete: () => {}
+  onOwnerComplete: () => {};
+  onRequestRepository: () => {}
+}
+
+type Queue = {
+  clear: () => {};
+  onAddOwner: () => {};
+  onAddRepository: () => {};
+}
+
+type StateService = {
+  addOwner: () => {};
+  getNextPage: () => number | undefined;
+}
+
+export const createTaskSucceed = (events: Events, state: StateService) => {
   const repositoryTaskFn = (value: TaskRepository) => {
     if (value.status === Status.ERROR) {
-      queue.clear();
+      events.onError()
       return;
     }
 
     const repositories = value.result.items;
 
     repositories.forEach((repository) => {
-      queue.add({
-        name: TaskName.GET_OWNER,
-        data: repository,
-      });
+      events.onRepositoryComlete(repository)
     });
   };
 
@@ -37,16 +52,11 @@ export const createTaskSucceed = (queue: Queue<Task, TaskResult>, state: StateRe
       return;
     }
 
-    setResult([...state.result, value.result]);
+    state.addOwner(value.result);
+    const nextPage = state.getNextPage();
 
-    const { result, pagination } = state;
-    const repositoriesFetched =
-      result.length / pagination.currentPage === MAX_REPO_PER_PAGE && state.pagination.pages > pagination.currentPage;
-
-    if (repositoriesFetched) {
-      queue.add({
-        name: TaskName.GET_REPOSITORIES,
-      });
+    if (nextPage !== undefined) {
+      events.onRequestRepository(nextPage)
     }
   };
 

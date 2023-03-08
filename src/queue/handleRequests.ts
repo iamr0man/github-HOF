@@ -64,10 +64,10 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
     };
   };
 
-  const setResult = (result: Result) => {
+  const addResult = (result: Result) => {
     state = {
       ...state,
-      result,
+      result: ,
     };
   };
 
@@ -95,7 +95,9 @@ export async function handleRepositoriesByQueue(language: string, repositoryLeng
   const queue = createQueue<Task, TaskResult>(initialState);
 
   queue.onProcess(createTaskProcess(getRepositoryTaskProps));
-  queue.onSucceed(createTaskSucceed(queue, state, setResult));
+  queue.onSucceed(createTaskSucceed(queue, {
+
+  }));
   queue.onFail(onFailed);
 
   async function onFailed(task: Task, err: unknown) {
