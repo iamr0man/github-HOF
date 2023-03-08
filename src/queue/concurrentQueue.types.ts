@@ -22,48 +22,72 @@ export type OwnerError = {
   name: TaskNameError.RATE_LIMIT_ERROR;
 };
 
-export type TaskRepository =
-  | {
-      name: TaskName.GET_REPOSITORIES;
-      status: Status.SUCCESS;
-      result: RepositoryResponse;
-    }
-  | {
-      name: TaskName.GET_REPOSITORIES;
-      status: Status.ERROR;
-      result: RepositoryError;
-    };
+export interface TaskRepositorySuccess {
+  name: TaskName.GET_REPOSITORIES;
+  status: Status.SUCCESS;
+  result: RepositoryResponse;
+}
 
-export type TaskOwner =
-  | {
-      name: TaskName.GET_OWNER;
-      status: Status.SUCCESS;
-      result: Owner;
-    }
-  | {
-      name: TaskName.GET_OWNER;
-      status: Status.ERROR;
-      result: OwnerError;
-    };
+export interface TaskRepositoryError {
+  name: TaskName.GET_REPOSITORIES;
+  status: Status.ERROR;
+  result: RepositoryError;
+}
+
+export type TaskRepository = TaskRepositorySuccess | TaskRepositoryError;
+
+export interface TaskOwnerSuccess {
+  name: TaskName.GET_OWNER;
+  status: Status.SUCCESS;
+  result: [Repository, Owner];
+}
+
+export interface TaskOwnerError {
+  name: TaskName.GET_OWNER;
+  status: Status.ERROR;
+  result: OwnerError;
+}
+
+export type TaskOwner = TaskOwnerSuccess | TaskOwnerError;
 
 export type TaskResult = TaskOwner | TaskRepository;
 
-export interface Task {
-  readonly name: TaskName;
+export type Task = TaskProcessRepositories | TaskProcessOwner;
+
+export interface TaskProcessRepositories {
+  readonly name: TaskName.GET_REPOSITORIES;
 }
 
-export interface Queue<T> {
+export interface TaskProcessOwner {
+  readonly name: TaskName.GET_OWNER;
+  readonly data: Repository;
+}
+
+export interface Queue<T, R> {
+  readonly onProcess: (cb: ProcessCb<T, R>) => void;
+  readonly onSucceed: (cb: SuccessCb<T, R>) => void;
+  readonly onFail: (cb: FailCb<T>) => void;
+
   readonly start: () => Promise<void[]>;
   readonly add: (task: T) => void;
   readonly clear: () => void;
 }
 
-export interface QueueFactoryOptions<T, R> {
+export interface QueueFactoryOptions {
   readonly concurrency?: number;
-
-  readonly process: (task: T) => Promise<R>;
-  readonly onSucceed?: (task: T, result: R) => Promise<void>;
-  readonly onFailed?: (task: T, err: unknown) => Promise<void>;
 }
 
+export type ProcessCb<T, R> = (task: T) => Promise<R>;
+export type SuccessCb<T, R> = (task: T, result: R) => void;
+export type FailCb<T> = (task: T, err: unknown) => Promise<void>;
+
 export type Result = Array<[Repository, Owner | null]>;
+
+export interface StateResult {
+  result: Result;
+  pagination: {
+    pages: number;
+    currentPage: number;
+    perPage: number;
+  };
+}
